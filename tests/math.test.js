@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {project,employerMatch,calculateAccount} from '../dist/math.js';
+const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<.01,`${actual} differs from ${expected}`);
+test('zero return equals deposits, including match',()=>{const r=project({monthly:500,match:150,years:35,annualReturn:0});near(r.balance,273000);near(r.growth,0);near(r.contributions,210000);near(r.employer,63000);});
+test('monthly calculation matches independent annuity formula',()=>{const rate=Math.pow(1.07,1/12)-1;const expected=500*(Math.pow(1+rate,420)-1)/rate;near(project({monthly:500,years:35,annualReturn:7}).balance,expected);});
+test('waiting 10 years uses 25 years of deposits at same finish',()=>{near(project({monthly:500,years:35,delay:10,annualReturn:7}).balance,project({monthly:500,years:25,annualReturn:7}).balance);});
+test('a full-horizon delay has no deposits or growth',()=>{near(project({monthly:500,years:10,delay:10,annualReturn:7}).balance,0);});
+test('negative returns record losses without negative account balance',()=>{const r=project({monthly:500,years:35,annualReturn:-5});assert.ok(r.growth<0);assert.ok(r.balance>0);near(r.balance,r.contributions+r.growth);});
+test('zero deposits produce zero at high positive returns',()=>near(project({monthly:0,years:45,annualReturn:12}).balance,0));
+test('match follows contribution and salary caps',()=>{near(employerMatch(500,60000,50,6),150);near(employerMatch(100,60000,50,6),50);near(employerMatch(500,60000,0,6),0);});
+test('IRA over-limit input is capped to $7500 per year',()=>{const r=calculateAccount({account:'roth',monthly:2000,years:1,annualReturn:0});near(r.balance,7500);near(r.appliedMonthly,625);near(r.employer,0);});
+test('401k caps employee deferrals separately from employer match',()=>{const r=calculateAccount({account:'401k',monthly:10000,years:1,annualReturn:0,salary:60000,matchRate:100,matchCap:6});near(r.contributions,24500);near(r.employer,3600);near(r.balance,28100);});
+test('401k combined additions cannot exceed compensation or $72000',()=>{const low=calculateAccount({account:'401k',monthly:10000,years:1,annualReturn:0,salary:12000,matchRate:100,matchCap:6});near(low.balance,12000);const high=calculateAccount({account:'401k',monthly:10000,years:1,annualReturn:0,salary:1000000,matchRate:100,matchCap:10});near(high.balance,49000);});
